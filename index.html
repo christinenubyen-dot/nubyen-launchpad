@@ -1,0 +1,434 @@
+<!-- NUBYÉN Launchpad: centralized app hub with access tracker (Supabase-backed) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Jost:wght@300;400;500;600&display=swap');
+
+  :root{
+    --bg:#FAF6F0; --panel:#FFFFFF; --ink:#211B15; --muted:#8A7B6B;
+    --line:#E7DCCE; --line-soft:#F1EAE0;
+    --gold:#B98A3C; --gold-deep:#9A6F28; --gold-soft:#F4E9D6;
+    --open:#5C7A5E; --restricted:#B98A3C; --locked:#A8503C;
+    --open-bg:#E9F0E9; --restricted-bg:#F6ECD8; --locked-bg:#F6E4DE;
+    --radius:4px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:'Jost',system-ui,sans-serif;font-size:15px;font-weight:400;line-height:1.55;min-height:100vh}
+  button{font-family:inherit;cursor:pointer}
+  input,select,textarea{font-family:inherit;font-size:14px}
+
+  .wrap{max-width:1040px;margin:0 auto;padding:34px 22px 64px}
+
+  /* Header */
+  header{margin-bottom:30px}
+  .masthead{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;padding-bottom:18px;border-bottom:1px solid var(--ink);position:relative}
+  .masthead::after{content:"";position:absolute;bottom:-4px;left:0;right:0;height:1px;background:var(--gold)}
+  .brand h1{font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:600;letter-spacing:.22em;line-height:1}
+  .brand h1 .accent{color:var(--gold)}
+  .brand small{display:block;margin-top:6px;font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  .header-actions{display:flex;align-items:center;gap:12px}
+
+  .tabs{display:inline-flex;border:1px solid var(--line);background:var(--panel)}
+  .tabs button{border:none;background:transparent;padding:9px 18px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--muted)}
+  .tabs button.active{background:var(--ink);color:#fff}
+  .btn-primary{background:var(--ink);color:#FAF6F0;border:1px solid var(--ink);padding:9px 22px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;transition:background .15s,color .15s}
+  .btn-primary:hover{background:var(--gold-deep);border-color:var(--gold-deep)}
+
+  /* Status lamp */
+  .lamp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .lamp-open{background:var(--open);box-shadow:0 0 0 3px var(--open-bg)}
+  .lamp-restricted{background:var(--restricted);box-shadow:0 0 0 3px var(--restricted-bg)}
+  .lamp-locked{background:var(--locked);box-shadow:0 0 0 3px var(--locked-bg)}
+
+  /* Launcher grid */
+  .cat-label{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--gold-deep);font-weight:500;margin:30px 0 12px;display:flex;align-items:center;gap:14px}
+  .cat-label::after{content:"";flex:1;height:1px;background:var(--line)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 18px 15px;display:flex;flex-direction:column;gap:8px;transition:box-shadow .18s,border-color .18s,transform .18s;position:relative}
+  .card.is-open:hover{box-shadow:0 10px 26px rgba(33,27,21,.08);border-color:var(--gold);transform:translateY(-2px)}
+  .card-top{display:flex;align-items:center;gap:10px}
+  .card-top .name{font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:600;letter-spacing:.01em}
+  .card .host{font-size:11.5px;letter-spacing:.06em;color:var(--muted);word-break:break-all}
+  .card .desc{font-size:13.5px;color:var(--muted);flex:1;font-weight:300}
+  .card-foot{display:flex;align-items:center;justify-content:space-between;margin-top:6px;padding-top:10px;border-top:1px solid var(--line-soft)}
+  .pill{font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:500;padding:3px 10px;border-radius:999px}
+  .pill-open{background:var(--open-bg);color:#41573F}
+  .pill-restricted{background:var(--restricted-bg);color:#84601C}
+  .pill-locked{background:var(--locked-bg);color:#823828}
+  .open-link{font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--gold-deep);text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+  .open-link:hover{color:var(--ink)}
+  .blocked-note{font-size:12.5px;color:var(--muted);font-weight:300}
+  .card.is-locked{background:#F5F0E8;border-style:dashed}
+  .card.is-locked .name,.card.is-locked .desc{color:var(--muted)}
+
+  /* Tracker table */
+  .tracker{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-top:22px}
+  .tracker-head{padding:18px 20px;border-bottom:1px solid var(--line)}
+  .tracker-head h2{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;letter-spacing:.04em}
+  .tracker-head p{font-size:13px;color:var(--muted);margin-top:2px;font-weight:300}
+  table{width:100%;border-collapse:collapse}
+  th{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);text-align:left;padding:11px 16px;border-bottom:1px solid var(--line-soft);font-weight:500}
+  td{padding:13px 16px;border-bottom:1px solid var(--line-soft);font-size:13.5px;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  td .app-name{display:flex;align-items:center;gap:9px;font-weight:500}
+  td .url{font-size:11.5px;letter-spacing:.04em;color:var(--muted);word-break:break-all;font-weight:300}
+  td input.owner{border:1px solid transparent;background:transparent;padding:5px 7px;width:130px;color:var(--ink)}
+  td input.owner:hover{border-color:var(--line)}
+  td input.owner:focus{outline:none;border-color:var(--gold);background:#fff}
+  .stamp{font-size:11px;letter-spacing:.06em;color:var(--muted);white-space:nowrap;font-weight:300}
+
+  /* 3-state access switch */
+  .switch{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;background:#F5F0E8}
+  .switch button{border:none;background:transparent;width:30px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .switch button svg{width:13px;height:13px}
+  .switch button.on-open{background:var(--open);color:#fff}
+  .switch button.on-restricted{background:var(--restricted);color:#fff}
+  .switch button.on-locked{background:var(--locked);color:#fff}
+
+  .row-actions{display:flex;gap:6px;justify-content:flex-end}
+  .icon-btn{border:1px solid var(--line);background:#fff;border-radius:3px;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+  .icon-btn:hover{color:var(--gold-deep);border-color:var(--gold)}
+  .icon-btn svg{width:14px;height:14px}
+
+  /* Modal form */
+  .overlay{position:fixed;inset:0;background:rgba(33,27,21,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .overlay.show{display:flex}
+  .modal{background:var(--bg);border-top:2px solid var(--gold);width:100%;max-width:440px;padding:24px;box-shadow:0 24px 60px rgba(33,27,21,.25)}
+  .modal h3{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:.04em;margin-bottom:16px}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;font-weight:500;margin-bottom:5px;color:var(--muted)}
+  .field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:3px;padding:9px 11px;background:#fff;color:var(--ink)}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--gold)}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+  .btn-ghost{background:transparent;border:1px solid var(--line);padding:8px 18px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--muted)}
+  .btn-ghost:hover{color:var(--ink);border-color:var(--ink)}
+
+  .empty{background:var(--panel);border:1px dashed var(--line);border-radius:var(--radius);padding:40px;text-align:center;color:var(--muted);margin-top:22px;font-weight:300}
+  .empty strong{color:var(--ink);font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;letter-spacing:.04em}
+
+  footer{margin-top:44px;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-size:11.5px;letter-spacing:.04em;color:var(--muted);font-weight:300}
+  footer button{border:none;background:none;color:var(--muted);font-size:11.5px;text-decoration:underline}
+  footer button:hover{color:var(--locked)}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#FAF6F0;padding:9px 20px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+  .toast.show{opacity:1}
+
+  @media (max-width:720px){
+    .brand h1{font-size:26px}
+    table thead{display:none}
+    table,tbody,tr,td{display:block;width:100%}
+    tr{border-bottom:1px solid var(--line);padding:8px 0}
+    td{border:none;padding:6px 16px}
+    .row-actions{justify-content:flex-start}
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="masthead">
+      <div class="brand">
+        <h1>NUBY<span class="accent">É</span>N</h1>
+        <small>New Beginnings · Launchpad — <span id="brand-count">0 apps · 0 open</span></small>
+      </div>
+      <div class="header-actions">
+        <div class="tabs">
+          <button id="tab-launcher" class="active" onclick="setView('launcher')">Launcher</button>
+          <button id="tab-tracker" onclick="setView('tracker')">Access tracker</button>
+        </div>
+        <button class="btn-primary" onclick="openModal()">Add app</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="view-launcher"></div>
+  <div id="view-tracker" style="display:none"></div>
+
+  <footer>
+    <span>Access shown on the launcher follows the tracker. Changes save automatically.</span>
+    <span style="display:flex;gap:16px">
+      <button onclick="restoreDefaults()">Restore default set</button>
+      <button onclick="resetAll()">Reset all data</button>
+    </span>
+  </footer>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>Add app</h3>
+    <div class="field"><label>Name</label><input id="f-name" placeholder="e.g. Sales dashboard"></div>
+    <div class="field"><label>URL</label><input id="f-url" placeholder="https://…"></div>
+    <div class="field"><label>Category</label><input id="f-cat" placeholder="e.g. Dashboards, Trackers, Apps" list="cat-list"><datalist id="cat-list"></datalist></div>
+    <div class="field"><label>Description</label><textarea id="f-desc" rows="2" placeholder="What this link is for"></textarea></div>
+    <div class="field"><label>Owner / access contact</label><input id="f-owner" placeholder="Who manages access"></div>
+    <div class="field"><label>Access</label>
+      <select id="f-access">
+        <option value="open">Open — visible and clickable</option>
+        <option value="restricted">Restricted — visible, requires request</option>
+        <option value="locked">Locked — visible but disabled</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" id="modal-save" onclick="saveModal()">Save app</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  SUPABASE CONFIG — paste your two values from
+//  Supabase dashboard → Settings → API
+//  The anon key is meant to live in client code; it is safe to publish.
+// ─────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://iabodmmfchymuryujvyd.supabase.co';      // e.g. https://abcdxyz.supabase.co
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYm9kbW1mY2h5bXVyeXVqdnlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2ODk2MzgsImV4cCI6MjA5ODI2NTYzOH0.k3wxDPI4T9aHbxyLnDY9379lqPTojoN0p1b36n5aeF4';    // the long "anon public" key
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let apps = [];
+let view = 'launcher';
+let editingId = null;
+
+const ACCESS = {
+  open:       { label:'Open',       pill:'pill-open',       lamp:'lamp-open' },
+  restricted: { label:'Restricted', pill:'pill-restricted', lamp:'lamp-restricted' },
+  locked:     { label:'Locked',     pill:'pill-locked',     lamp:'lamp-locked' }
+};
+
+const SEED = [
+  { name:'Sales CRM', url:'https://example.com/sales-crm', category:'Dashboards', description:'Sales CRM — personal dashboard.', owner:'You', access:'open' },
+  { name:'Shipment Tracker', url:'https://delivery-dashboard.replit.app', category:'Trackers', description:'Delivery dashboard — order fulfilment and delivery status.', owner:'You', access:'open' },
+  { name:'JIRA Task Management', url:'https://nubyen.atlassian.net', category:'Trackers', description:'General Business Tasks — Kanban board.', owner:'You', access:'open' },
+  { name:'Onboarding', url:'https://example.com/onboarding', category:'Apps', description:'Team and customer onboarding.', owner:'You', access:'open' },
+  { name:'SOP links', url:'https://example.com/sop', category:'Others', description:'Standard operating procedure links.', owner:'You', access:'open' },
+  { name:'Accounting/Finance', url:'https://example.com/finance', category:'Dashboards', description:'Nubyén — Living Dashboard 2026.', owner:'You', access:'open' },
+  { name:'Customer Service', url:'https://app.gorgias.com', category:'Apps', description:'Gorgias — helpdesk and customer support.', owner:'You', access:'open' },
+  { name:'Tarlu', url:'https://example.com/tarlu', category:'Others', description:'Placeholder — update with the real link.', owner:'You', access:'open' },
+  { name:'Launchpad', url:'https://example.com/launchpad', category:'Others', description:'Placeholder — update with the real link.', owner:'You', access:'open' },
+  { name:'Shopify', url:'https://admin.shopify.com', category:'Dashboards', description:'Store admin — orders, products and analytics.', owner:'You', access:'open' }
+];
+
+// (Migration list not needed in the Supabase build — the table is the source of truth.)
+
+function uid(){ return 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function esc(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function host(u){ try { return new URL(u).host + new URL(u).pathname.replace(/\/$/,''); } catch { return u; } }
+function stamp(){ return new Date().toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
+
+// ── Data layer: Supabase ──────────────────────────────────────
+async function load(){
+  const { data, error } = await sb.from('apps').select('*');
+  if (error){
+    toast('Could not reach Supabase — check your config');
+    console.error(error);
+    apps = [];
+  } else if (!data.length){
+    // First run on an empty table: seed it once
+    apps = SEED.map(a => ({...a, id:uid(), updated:stamp()}));
+    await sb.from('apps').insert(apps);
+  } else {
+    apps = data;
+  }
+  sortApps();
+  render();
+}
+
+// Keep a stable on-screen order (category, then name)
+function sortApps(){
+  const order = ['Dashboards','Trackers','Apps','Others'];
+  apps.sort((a,b)=>{
+    const ai = order.indexOf(a.category), bi = order.indexOf(b.category);
+    const av = ai<0?99:ai, bv = bi<0?99:bi;
+    return av-bv || (a.name||'').localeCompare(b.name||'');
+  });
+}
+
+// Write a single row (insert or update)
+async function saveRow(a){
+  const { error } = await sb.from('apps').upsert(a);
+  if (error){ toast('Save failed — check connection'); console.error(error); }
+}
+
+// Delete a single row
+async function deleteRow(id){
+  const { error } = await sb.from('apps').delete().eq('id', id);
+  if (error){ toast('Delete failed'); console.error(error); }
+}
+
+function setView(v){
+  view = v;
+  document.getElementById('tab-launcher').classList.toggle('active', v==='launcher');
+  document.getElementById('tab-tracker').classList.toggle('active', v==='tracker');
+  document.getElementById('view-launcher').style.display = v==='launcher' ? '' : 'none';
+  document.getElementById('view-tracker').style.display = v==='tracker' ? '' : 'none';
+}
+
+function render(){
+  renderLauncher();
+  renderTracker();
+  const open = apps.filter(a=>a.access==='open').length;
+  document.getElementById('brand-count').textContent = apps.length + ' apps · ' + open + ' open';
+  const cats = [...new Set(apps.map(a=>a.category).filter(Boolean))];
+  document.getElementById('cat-list').innerHTML = cats.map(c=>'<option value="'+esc(c)+'">').join('');
+}
+
+function renderLauncher(){
+  const el = document.getElementById('view-launcher');
+  if (!apps.length){
+    el.innerHTML = '<div class="empty"><strong>No apps yet.</strong><br>Use "Add app" to link your first dashboard or tracker.</div>';
+    return;
+  }
+  const cats = [...new Set(apps.map(a=>a.category || 'Other'))];
+  el.innerHTML = cats.map(cat => {
+    const cards = apps.filter(a => (a.category||'Other')===cat).map(a => {
+      const acc = ACCESS[a.access];
+      let foot;
+      if (a.access==='open'){
+        foot = '<a class="open-link" href="'+esc(a.url)+'" target="_blank" rel="noopener">Open <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12L12 4M6 4h6v6"/></svg></a>';
+      } else if (a.access==='restricted'){
+        foot = '<span class="blocked-note">Request access' + (a.owner ? ' from ' + esc(a.owner) : '') + '</span>';
+      } else {
+        foot = '<span class="blocked-note">Locked by tracker</span>';
+      }
+      return '<div class="card is-'+a.access+'">'
+        + '<div class="card-top"><span class="lamp-dot '+acc.lamp+'"></span><span class="name">'+esc(a.name)+'</span></div>'
+        + '<div class="host">'+esc(host(a.url))+'</div>'
+        + (a.description ? '<div class="desc">'+esc(a.description)+'</div>' : '')
+        + '<div class="card-foot"><span class="pill '+acc.pill+'">'+acc.label+'</span>'+foot+'</div>'
+        + '</div>';
+    }).join('');
+    return '<div class="cat-label">'+esc(cat)+'</div><div class="grid">'+cards+'</div>';
+  }).join('');
+}
+
+function switchHTML(a){
+  const icons = {
+    open:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5l3.5 3.5L13 5"/></svg>',
+    restricted:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5v4M8 11.5v.01"/></svg>',
+    locked:'<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="7" width="8" height="6" rx="1"/><path d="M6 7V5a2 2 0 014 0v2"/></svg>'
+  };
+  return '<div class="switch">' + ['open','restricted','locked'].map(s =>
+    '<button title="'+ACCESS[s].label+'" class="'+(a.access===s?'on-'+s:'')+'" onclick="setAccess(\''+a.id+'\',\''+s+'\')">'+icons[s]+'</button>'
+  ).join('') + '</div>';
+}
+
+function renderTracker(){
+  const el = document.getElementById('view-tracker');
+  if (!apps.length){
+    el.innerHTML = '<div class="empty"><strong>Nothing to track yet.</strong><br>Add an app and its access will appear here.</div>';
+    return;
+  }
+  const rows = apps.map(a => {
+    const acc = ACCESS[a.access];
+    return '<tr>'
+      + '<td><div class="app-name"><span class="lamp-dot '+acc.lamp+'"></span>'+esc(a.name)+'</div><div class="url">'+esc(host(a.url))+'</div></td>'
+      + '<td>'+switchHTML(a)+'</td>'
+      + '<td><input class="owner" value="'+esc(a.owner||'')+'" placeholder="Owner" onchange="setOwner(\''+a.id+'\', this.value)"></td>'
+      + '<td><span class="stamp">'+esc(a.updated||'—')+'</span></td>'
+      + '<td><div class="row-actions">'
+        + '<button class="icon-btn" title="Edit" onclick="openModal(\''+a.id+'\')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M11.5 2.5l2 2L5 13l-2.7.7L3 11l8.5-8.5z"/></svg></button>'
+        + '<button class="icon-btn" title="Delete" onclick="removeApp(\''+a.id+'\')"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5h10M6.5 4V3h3v1M5 4.5l.5 8.5h5l.5-8.5"/></svg></button>'
+      + '</div></td>'
+      + '</tr>';
+  }).join('');
+  el.innerHTML = '<div class="tracker">'
+    + '<div class="tracker-head"><h2>Access tracker</h2><p>The switch sets each link\'s state on the launcher: open, restricted (request from owner), or locked.</p></div>'
+    + '<table><thead><tr><th>App</th><th>Access</th><th>Owner</th><th>Last changed</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'
+    + '</div>';
+}
+
+async function setAccess(id, s){
+  const a = apps.find(x=>x.id===id); if(!a) return;
+  a.access = s; a.updated = stamp();
+  await saveRow(a); render();
+  toast(a.name + ' set to ' + ACCESS[s].label);
+}
+async function setOwner(id, v){
+  const a = apps.find(x=>x.id===id); if(!a) return;
+  a.owner = v.trim(); a.updated = stamp();
+  await saveRow(a); render();
+}
+async function removeApp(id){
+  const a = apps.find(x=>x.id===id); if(!a) return;
+  if (!confirm('Remove "'+a.name+'" from the launchpad?')) return;
+  apps = apps.filter(x=>x.id!==id);
+  await deleteRow(id); render();
+  toast('Removed ' + a.name);
+}
+
+function openModal(id){
+  editingId = id || null;
+  document.querySelector('#overlay .modal h3').textContent = id ? 'Edit app' : 'Add app';
+  document.getElementById('modal-save').textContent = id ? 'Save changes' : 'Save app';
+  const a = id ? apps.find(x=>x.id===id) : null;
+  document.getElementById('f-name').value = a ? a.name : '';
+  document.getElementById('f-url').value = a ? a.url : '';
+  document.getElementById('f-cat').value = a ? (a.category||'') : '';
+  document.getElementById('f-desc').value = a ? (a.description||'') : '';
+  document.getElementById('f-owner').value = a ? (a.owner||'') : '';
+  document.getElementById('f-access').value = a ? a.access : 'open';
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('f-name').focus();
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
+
+async function saveModal(){
+  const name = document.getElementById('f-name').value.trim();
+  let url = document.getElementById('f-url').value.trim();
+  if (!name || !url){ toast('Name and URL are required'); return; }
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  const data = {
+    name, url,
+    category: document.getElementById('f-cat').value.trim() || 'Other',
+    description: document.getElementById('f-desc').value.trim(),
+    owner: document.getElementById('f-owner').value.trim(),
+    access: document.getElementById('f-access').value,
+    updated: stamp()
+  };
+  let saved;
+  if (editingId){
+    const a = apps.find(x=>x.id===editingId);
+    Object.assign(a, data);
+    saved = a;
+    toast('Updated ' + name);
+  } else {
+    saved = { id:uid(), ...data };
+    apps.push(saved);
+    toast('Added ' + name);
+  }
+  closeModal();
+  await saveRow(saved); sortApps(); render();
+}
+
+async function restoreDefaults(){
+  if (!confirm('Reload the launchpad with the current default set of links? This replaces what is on the board now.')) return;
+  // Clear the table, then reseed
+  await sb.from('apps').delete().neq('id', '');
+  apps = SEED.map(a => ({...a, id:uid(), updated:stamp()}));
+  await sb.from('apps').insert(apps);
+  sortApps(); render();
+  toast('Default set restored');
+}
+
+async function resetAll(){
+  if (!confirm('Reset the launchpad? This removes all apps and tracker data.')) return;
+  await sb.from('apps').delete().neq('id', '');
+  apps = [];
+  render();
+  toast('Launchpad reset');
+}
+
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+document.getElementById('overlay').addEventListener('click', e => { if (e.target.id==='overlay') closeModal(); });
+load();
+</script>
