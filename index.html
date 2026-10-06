@@ -185,7 +185,9 @@
 const SUPABASE_URL = 'https://ubfzqebpuibvlntkxown.supabase.co';      // e.g. https://abcdxyz.supabase.co
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InViZnpxZWJwdWlidmxudGt4b3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NTc4MzEsImV4cCI6MjA5NzQzMzgzMX0.O-cCOGfq1icxXe6Barefb691cLytXAJo4RJzIyoiWLs';    // the long "anon public" key
 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  db: { schema: 'launchpad' }
+});
 
 let apps = [];
 let view = 'launcher';
